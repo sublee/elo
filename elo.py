@@ -54,8 +54,8 @@ def rate(rating, series, k_factor=K_FACTOR):
 
 def rate_1vs1(rating1, rating2, drawn=False, k_factor=K_FACTOR):
     actual_scores = (DRAW, DRAW) if drawn else (WIN, LOSE)
-    return rate(rating1, [(actual_scores[0], rating2)], k_factor), \
-           rate(rating2, [(actual_scores[1], rating1)], k_factor)
+    return (rate(rating1, [(actual_scores[0], rating2)], k_factor),
+            rate(rating2, [(actual_scores[1], rating1)], k_factor))
 
 
 def quality_1vs1(rating1, rating2):
