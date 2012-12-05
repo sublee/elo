@@ -1,15 +1,32 @@
 # -*- coding: utf-8 -*-
+from __future__ import with_statement
+import re
 from setuptools import setup
+from setuptools.command.test import test
+import sys
+
+
+# detect the current version
+with open('elo.py') as f:
+    version = re.search(r'__version__\s*=\s*\'(.+?)\'', f.read()).group(1)
+assert version
+
+
+# use pytest instead
+def run_tests(self):
+    test_file = re.sub(r'\.pyc$', '.py', __import__(self.test_suite).__file__)
+    raise SystemExit(__import__('pytest').main([test_file]))
+test.run_tests = run_tests
 
 
 setup(
     name='elo',
-    version='0.0',
+    version=version,
     license='BSD',
     author='Heungsub Lee',
-    author_email='h' '@' 'subl.ee',
-    url='http://github.com/sublee',
-    description='Most famous skill rating system',
+    author_email='h'r'@'r's'r'u'r'b'r'l'r'.'r'e'r'e',
+    url='http://github.com/sublee/elo',
+    description='The Elo rating system',
     platforms='any',
     classifiers=['Development Status :: 1 - Planning',
                  'Intended Audience :: Developers',
@@ -22,7 +39,7 @@ setup(
                  'Programming Language :: Python :: Implementation :: CPython',
                  'Programming Language :: Python :: Implementation :: PyPy',
                  'Topic :: Games/Entertainment'],
-    test_suite='elotests.suite',
-    test_loader='attest:auto_reporter.test_loader',
-    tests_require=['Attest'],
+    install_requires=['distribute'],
+    test_suite='elotests',
+    tests_require=['pytest'],
 )

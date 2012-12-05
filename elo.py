@@ -8,6 +8,7 @@
     :copyright: (c) 2012 by Heungsub Lee
     :license: BSD, see LICENSE for more details.
 """
+__version__  = '0.1.dev'
 #__all__ = ['Elo', 'transform_ratings', 'match_quality',
 #           'calc_draw_probability', 'calc_draw_margin', 'setup',
 #           'MU', 'SIGMA', 'BETA', 'TAU', 'DRAW_PROBABILITY']
