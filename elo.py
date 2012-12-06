@@ -40,23 +40,22 @@ def expect(rating, other_rating):
     return 1. / (1 + 10 ** ((other_rating - rating) / 400.))
 
 
-def adjust(rating, series, k_factor=K_FACTOR):
+def adjust(rating, series):
     """Calculates the adjustment value."""
-    k = k_factor(rating) if callable(k_factor) else k_factor
-    adjustment = 0
-    for actual_score, other_rating in series:
-        adjustment += actual_score - expect(rating, other_rating)
-    return k * adjustment
+    return sum(score - expect(rating, other_rating)
+               for score, other_rating in series)
 
 
 def rate(rating, series, k_factor=K_FACTOR):
-    return rating + adjust(rating, series, k_factor)
+    """Calculates new ratings by the game result series."""
+    k = k_factor(rating) if callable(k_factor) else k_factor
+    return rating + k * adjust(rating, series)
 
 
 def rate_1vs1(rating1, rating2, drawn=False, k_factor=K_FACTOR):
-    actual_scores = (DRAW, DRAW) if drawn else (WIN, LOSE)
-    return (rate(rating1, [(actual_scores[0], rating2)], k_factor),
-            rate(rating2, [(actual_scores[1], rating1)], k_factor))
+    scores = (DRAW, DRAW) if drawn else (WIN, LOSE)
+    return (rate(rating1, [(scores[0], rating2)], k_factor),
+            rate(rating2, [(scores[1], rating1)], k_factor))
 
 
 def quality_1vs1(rating1, rating2):
