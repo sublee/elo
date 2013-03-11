@@ -41,5 +41,5 @@ setup(
                  'Topic :: Games/Entertainment'],
     install_requires=['distribute'],
     test_suite='elotests',
-    tests_require=['pytest'],
+    tests_require=['pytest', 'almost'],
 )

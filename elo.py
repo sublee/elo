@@ -8,10 +8,13 @@
     :copyright: (c) 2012 by Heungsub Lee
     :license: BSD, see LICENSE for more details.
 """
+from abc import ABCMeta
+from datetime import datetime
+
+
 __version__  = '0.1.dev'
-#__all__ = ['Elo', 'transform_ratings', 'match_quality',
-#           'calc_draw_probability', 'calc_draw_margin', 'setup',
-#           'MU', 'SIGMA', 'BETA', 'TAU', 'DRAW_PROBABILITY']
+#__all__ = ['Elo',
+
 
 #: The actual score for win
 WIN = 1.
@@ -20,43 +23,223 @@ DRAW = 0.5
 #: The actual score for lose
 LOSE = 0.
 
-#: Default initial rating
-INITIAL = 1500
 #: Default K-factor
 K_FACTOR = 10
-#: The USCF has staggered the K-factor according to three main rating ranges
-#: of:
-#:
-#: - Players below 2100 -> K-factor of 32 used.
-#: - Players between 2100 and 2400 -> K-factor of 24 used.
-#: - Players above 2400 -> K-factor of 16 used.
-USCF_K_FACTOR = lambda r: 32 if r < 2100 else 24 if r < 2400 else 16
+#: Default rating class
+RATING_CLASS = float
+#: Default initial rating
+INITIAL = 1500
+#: Default Beta value
+BETA = 200
 
 
-def expect(rating, other_rating):
-    """The "E" function in Elo. It calculates the expected score of the first
-    rating by the second rating.
-    """
-    return 1. / (1 + 10 ** ((other_rating - rating) / 400.))
+class Rating(object):
+
+    __metaclass__ = ABCMeta
+
+    value = None
+
+    def __init__(self, value):
+        self.value = value
+
+    def rated(self, value):
+        self.value = value
+        return self
+
+    def before_rate(self):
+        pass
+
+    def after_rated(self):
+        pass
+
+    def __int__(self):
+        """Type-casting to ``int``."""
+        return int(self.value)
+
+    def __float__(self):
+        """Type-casting to ``float``."""
+        return float(self.value)
+
+    def __nonzero__(self):
+        """Type-casting to ``bool``."""
+        return bool(int(self))
+
+    # Python 3 accepts __bool__ instead of __nonzero__
+    __bool__ = __nonzero__
+
+    def __eq__(self, other):
+        return float(self) == float(other)
+
+    def __lt__(self, other):
+        """Is Rating < number.
+
+        :param other: the operand
+        :type other: number
+        """
+        return self.value < other
+
+    def __le__(self, other):
+        """Is Rating <= number.
+
+        :param other: the operand
+        :type other: number
+        """
+        return self.value <= other
+
+    def __gt__(self, other):
+        """Is Rating > number.
+
+        :param other: the operand
+        :type other: number
+        """
+        return self.value > other
+
+    def __ge__(self, other):
+        """Is Rating >= number.
+
+        :param other: the operand
+        :type other: number
+        """
+        return self.value >= other
+
+    def __iadd__(self, other):
+        """Rating += number.
+
+        :param other: the operand
+        :type other: number
+        """
+        self.value += other
+        return self
+
+    def __isub__(self, other):
+        """Rating -= number.
+
+        :param other: the operand
+        :type other: number
+        """
+        self.value -= other
+        return self
+
+
+class CountedRating(Rating):
+
+    times = None
+
+    def __init__(self, value, times=0):
+        self.times = times
+        super(CountedRating, self).__init__(value)
+
+    def rated(self, value):
+        self.times += 1
+        return super(CountedRating, self).rated(value)
+
+    def copy(self, value):
+        return type(self)(value, self.rated)
+
+    def after_rated(self):
+        self.rated += 1
+        super(CountedRating, self).after_rated()
+
+
+class TimedRating(Rating):
+
+    rated_at = None
+
+    def __init__(self, value, rated_at=None):
+        self.rated_at = rated_at
+        super(TimedRating, self).__init__(value)
+
+    def rated(self, value):
+        self.rated_at = datetime.utcnow()
+        return super(TimedRating, self).rated(value)
+
+
+Rating.register(float)
+
+
+class Elo(object):
+
+    def __init__(self, k_factor=K_FACTOR, rating_class=RATING_CLASS,
+                 initial=INITIAL, beta=BETA):
+        self.k_factor = k_factor
+        self.rating_class = rating_class
+        self.initial = self.ensure_rating(initial)
+        self.beta = beta
+
+    def expect(self, rating, other_rating):
+        """The "E" function in Elo. It calculates the expected score of the
+        first rating by the second rating.
+        """
+        diff = float(other_rating) - float(rating)
+        return 1. / (1 + 10 ** (diff / (2 * self.beta)))
+
+    def adjust(self, rating, series):
+        """Calculates the adjustment value."""
+        return sum(score - self.expect(rating, other_rating)
+                   for score, other_rating in series)
+
+    def rate(self, rating, series):
+        """Calculates new ratings by the game result series."""
+        rating = self.ensure_rating(rating)
+        k = self.k_factor(rating) if callable(self.k_factor) else self.k_factor
+        new_rating = float(rating) + k * self.adjust(rating, series)
+        if hasattr(rating, 'rated'):
+            new_rating = rating.rated(new_rating)
+        return new_rating
+
+    def adjust_1vs1(self, rating1, rating2, drawn=False):
+        return self.adjust(rating1, [(DRAW if drawn else WIN, rating2)])
+
+    def rate_1vs1(self, rating1, rating2, drawn=False):
+        scores = (DRAW, DRAW) if drawn else (WIN, LOSE)
+        return (self.rate(rating1, [(scores[0], rating2)]),
+                self.rate(rating2, [(scores[1], rating1)]))
+
+    def quality_1vs1(self, rating1, rating2):
+        return 2 * (0.5 - abs(0.5 - self.expect(rating1, rating2)))
+
+    def create_rating(self, *args, **kwargs):
+        return self.rating_class(*args, **kwargs)
+
+    def ensure_rating(self, rating):
+        if isinstance(rating, self.rating_class):
+            return rating
+        return self.rating_class(rating)
+
+
+_global = []
+
+
+def _g():
+    """Gets the global Elo environment."""
+    if not _global:
+        setup()  # setup the default environment
+    return _global[0]
+
+
+def setup(k_factor=K_FACTOR, rating_class=RATING_CLASS,
+          initial=INITIAL, beta=BETA, env=None):
+    try:
+        _global.pop()
+    except IndexError:
+        pass
+    if env is None:
+        env = Elo(k_factor, rating_class, initial, beta)
+    _global.append(env)
+    return _g()
 
 
 def adjust(rating, series):
-    """Calculates the adjustment value."""
-    return sum(score - expect(rating, other_rating)
-               for score, other_rating in series)
+    return _g().adjust(rating, series)
 
 
-def rate(rating, series, k_factor=K_FACTOR):
-    """Calculates new ratings by the game result series."""
-    k = k_factor(rating) if callable(k_factor) else k_factor
-    return rating + k * adjust(rating, series)
+def rate(rating, series):
+    return _g().rate(rating, series)
 
 
-def rate_1vs1(rating1, rating2, drawn=False, k_factor=K_FACTOR):
-    scores = (DRAW, DRAW) if drawn else (WIN, LOSE)
-    return (rate(rating1, [(scores[0], rating2)], k_factor),
-            rate(rating2, [(scores[1], rating1)], k_factor))
+def adjust_1vs1(rating1, rating2, drawn=False):
+    return _g().adjust_1vs1(rating1, rating2, drawn)
 
 
-def quality_1vs1(rating1, rating2):
-    return 2 * (0.5 - abs(0.5 - expect_score(rating1, rating2)))
+def rate_1vs1(rating1, rating2, drawn=False):
+    return _g().rate_1vs1(rating1, rating2, drawn)
