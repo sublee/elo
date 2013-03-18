@@ -163,15 +163,17 @@ class Elo(object):
                  initial=INITIAL, beta=BETA):
         self.k_factor = k_factor
         self.rating_class = rating_class
-        self.initial = self.ensure_rating(initial)
+        self.initial = initial
         self.beta = beta
 
     def expect(self, rating, other_rating):
         """The "E" function in Elo. It calculates the expected score of the
         first rating by the second rating.
         """
+        # http://www.chess-mind.com/en/elo-system
         diff = float(other_rating) - float(rating)
-        return 1. / (1 + 10 ** (diff / (2 * self.beta)))
+        f_factor = 2 * self.beta  # rating disparity
+        return 1. / (1 + 10 ** (diff / f_factor))
 
     def adjust(self, rating, series):
         """Calculates the adjustment value."""
@@ -198,8 +200,10 @@ class Elo(object):
     def quality_1vs1(self, rating1, rating2):
         return 2 * (0.5 - abs(0.5 - self.expect(rating1, rating2)))
 
-    def create_rating(self, *args, **kwargs):
-        return self.rating_class(*args, **kwargs)
+    def create_rating(self, value=None, *args, **kwargs):
+        if value is None:
+            value = self.initial
+        return self.rating_class(value, *args, **kwargs)
 
     def ensure_rating(self, rating):
         if isinstance(rating, self.rating_class):
@@ -207,39 +211,35 @@ class Elo(object):
         return self.rating_class(rating)
 
 
-_global = []
+def adjust(rating, series):
+    return global_env().adjust(rating, series)
 
 
-def _g():
-    """Gets the global Elo environment."""
-    if not _global:
-        setup()  # setup the default environment
-    return _global[0]
+def rate(rating, series):
+    return global_env().rate(rating, series)
+
+
+def adjust_1vs1(rating1, rating2, drawn=False):
+    return global_env().adjust_1vs1(rating1, rating2, drawn)
+
+
+def rate_1vs1(rating1, rating2, drawn=False):
+    return global_env().rate_1vs1(rating1, rating2, drawn)
 
 
 def setup(k_factor=K_FACTOR, rating_class=RATING_CLASS,
           initial=INITIAL, beta=BETA, env=None):
-    try:
-        _global.pop()
-    except IndexError:
-        pass
     if env is None:
         env = Elo(k_factor, rating_class, initial, beta)
-    _global.append(env)
-    return _g()
+    global_env.__elo__ = env
+    return env
 
 
-def adjust(rating, series):
-    return _g().adjust(rating, series)
-
-
-def rate(rating, series):
-    return _g().rate(rating, series)
-
-
-def adjust_1vs1(rating1, rating2, drawn=False):
-    return _g().adjust_1vs1(rating1, rating2, drawn)
-
-
-def rate_1vs1(rating1, rating2, drawn=False):
-    return _g().rate_1vs1(rating1, rating2, drawn)
+def global_env():
+    """Gets the global Elo environment."""
+    try:
+        global_env.__elo__
+    except AttributeError:
+        # setup the default environment
+        setup()
+    return global_env.__elo__

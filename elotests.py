@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#http://elo.divergentinformatics.com/
 import math
 
 from almost import almost
@@ -18,6 +19,11 @@ def test_rating():
     assert not (Rating(100) >= 200)
     assert Rating(100) == Rating(100)
     assert Rating(100) != Rating(200)
+
+
+def test_initial_rating():
+    env = Elo(initial=1000)
+    assert env.create_rating() == 1000
 
 
 def test_custom_rating_class():
