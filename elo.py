@@ -8,53 +8,59 @@
     :copyright: (c) 2012 by Heungsub Lee
     :license: BSD, see LICENSE for more details.
 """
-from abc import ABCMeta
 from datetime import datetime
+import inspect
 
 
 __version__  = '0.1.dev'
-#__all__ = ['Elo',
+__all__ = ['Elo', 'Rating', 'CountedRating', 'TimedRating', 'rate', 'adjust',
+           'expect', 'rate_1vs1', 'adjust_1vs1', 'quality_1vs1', 'setup',
+           'global_env', 'WIN', 'DRAW', 'LOSS', 'K_FACTOR', 'RATING_CLASS',
+           'INITIAL', 'BETA']
 
 
-#: The actual score for win
+#: The actual score for win.
 WIN = 1.
-#: The actual score for draw
+#: The actual score for draw.
 DRAW = 0.5
-#: The actual score for lose
-LOSE = 0.
+#: The actual score for loss.
+LOSS = 0.
 
-#: Default K-factor
+#: Default K-factor.
 K_FACTOR = 10
-#: Default rating class
+#: Default rating class.
 RATING_CLASS = float
-#: Default initial rating
-INITIAL = 1500
-#: Default Beta value
+#: Default initial rating.
+INITIAL = 1200
+#: Default Beta value.
 BETA = 200
 
 
 class Rating(object):
 
-    __metaclass__ = ABCMeta
+    try:
+        __metaclass__ = __import__('abc').ABCMeta
+    except ImportError:
+        # for Python 2.5
+        pass
 
     value = None
 
-    def __init__(self, value):
+    def __init__(self, value=None):
+        if value is None:
+            value = global_env().initial
         self.value = value
 
     def rated(self, value):
-        self.value = value
-        return self
-
-    def before_rate(self):
-        pass
-
-    def after_rated(self):
-        pass
+        return type(self)(value)
 
     def __int__(self):
         """Type-casting to ``int``."""
         return int(self.value)
+
+    def __long__(self):
+        """Type-casting to ``long``."""
+        return long(self.value)
 
     def __float__(self):
         """Type-casting to ``float``."""
@@ -63,9 +69,6 @@ class Rating(object):
     def __nonzero__(self):
         """Type-casting to ``bool``."""
         return bool(int(self))
-
-    # Python 3 accepts __bool__ instead of __nonzero__
-    __bool__ = __nonzero__
 
     def __eq__(self, other):
         return float(self) == float(other)
@@ -120,41 +123,49 @@ class Rating(object):
         self.value -= other
         return self
 
+    def __repr__(self):
+        c = type(self)
+        ext_params = inspect.getargspec(c.__init__)[0][2:]
+        kwargs = ', '.join('%s=%r' % (param, getattr(self, param))
+                           for param in ext_params)
+        if kwargs:
+            kwargs = ', ' + kwargs
+        args = ('.'.join([c.__module__, c.__name__]), self.value, kwargs)
+        return '%s(%.3f%s)' % args
+
+
+try:
+    Rating.register(float)
+except AttributeError:
+    pass
+
 
 class CountedRating(Rating):
 
     times = None
 
-    def __init__(self, value, times=0):
+    def __init__(self, value=None, times=0):
         self.times = times
         super(CountedRating, self).__init__(value)
 
     def rated(self, value):
-        self.times += 1
-        return super(CountedRating, self).rated(value)
-
-    def copy(self, value):
-        return type(self)(value, self.rated)
-
-    def after_rated(self):
-        self.rated += 1
-        super(CountedRating, self).after_rated()
+        rated = super(CountedRating, self).rated(value)
+        rated.times = self.times + 1
+        return rated
 
 
 class TimedRating(Rating):
 
     rated_at = None
 
-    def __init__(self, value, rated_at=None):
+    def __init__(self, value=None, rated_at=None):
         self.rated_at = rated_at
         super(TimedRating, self).__init__(value)
 
     def rated(self, value):
-        self.rated_at = datetime.utcnow()
-        return super(TimedRating, self).rated(value)
-
-
-Rating.register(float)
+        rated = super(TimedRating, self).rated(value)
+        rated.rated_at = datetime.utcnow()
+        return rated
 
 
 class Elo(object):
@@ -193,7 +204,7 @@ class Elo(object):
         return self.adjust(rating1, [(DRAW if drawn else WIN, rating2)])
 
     def rate_1vs1(self, rating1, rating2, drawn=False):
-        scores = (DRAW, DRAW) if drawn else (WIN, LOSE)
+        scores = (DRAW, DRAW) if drawn else (WIN, LOSS)
         return (self.rate(rating1, [(scores[0], rating2)]),
                 self.rate(rating2, [(scores[1], rating1)]))
 
@@ -210,21 +221,57 @@ class Elo(object):
             return rating
         return self.rating_class(rating)
 
+    def make_as_global(self):
+        """Registers the environment as the global environment.
 
-def adjust(rating, series):
-    return global_env().adjust(rating, series)
+        >>> env = Elo(initial=2000)
+        >>> Rating()
+        elo.Rating(1200.000)
+        >>> env.make_as_global()  #doctest: +ELLIPSIS
+        elo.Elo(..., initial=2000.000, ...)
+        >>> Rating()
+        elo.Rating(2000.000)
+
+        But if you need just one environment, use :func:`setup` instead.
+        """
+        return setup(env=self)
+
+    def __repr__(self):
+        c = type(self)
+        rc = self.rating_class
+        if callable(self.k_factor):
+            f = self.k_factor
+            k_factor = '.'.join([f.__module__, f.__name__])
+        else:
+            k_factor = '%.3f' % self.k_factor
+        args = ('.'.join([c.__module__, c.__name__]), k_factor,
+                '.'.join([rc.__module__, rc.__name__]), self.initial, self.beta)
+        return ('%s(k_factor=%s, rating_class=%s, '
+                'initial=%.3f, beta=%.3f)' % args)
 
 
 def rate(rating, series):
     return global_env().rate(rating, series)
 
 
-def adjust_1vs1(rating1, rating2, drawn=False):
-    return global_env().adjust_1vs1(rating1, rating2, drawn)
+def adjust(rating, series):
+    return global_env().adjust(rating, series)
+
+
+def expect(rating, other_rating):
+    return global_env().expect(rating, other_rating)
 
 
 def rate_1vs1(rating1, rating2, drawn=False):
     return global_env().rate_1vs1(rating1, rating2, drawn)
+
+
+def adjust_1vs1(rating1, rating2, drawn=False):
+    return global_env().adjust_1vs1(rating1, rating2, drawn)
+
+
+def quality_1vs1(rating1, rating2):
+    return global_env().quality_1vs1(rating1, rating2)
 
 
 def setup(k_factor=K_FACTOR, rating_class=RATING_CLASS,
