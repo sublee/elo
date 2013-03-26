@@ -52,6 +52,10 @@ class Rating(object):
         self.value = value
 
     def rated(self, value):
+        """Creates a :class:`Rating` object for the recalculated rating.
+
+        :param value: the recalculated rating value.
+        """
         return type(self)(value)
 
     def __int__(self):
@@ -141,6 +145,7 @@ except AttributeError:
 
 
 class CountedRating(Rating):
+    """Increases count each rating recalculation."""
 
     times = None
 
@@ -155,6 +160,7 @@ class CountedRating(Rating):
 
 
 class TimedRating(Rating):
+    """Writes the final rated time."""
 
     rated_at = None
 
