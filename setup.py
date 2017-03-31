@@ -74,7 +74,6 @@ setup(
                  'Programming Language :: Python :: Implementation :: CPython',
                  'Programming Language :: Python :: Implementation :: PyPy',
                  'Topic :: Games/Entertainment'],
-    install_requires=['distribute'],
     test_suite='elotests',
     tests_require=['pytest', 'almost'],
     use_2to3=(sys.version_info[0] >= 3),
