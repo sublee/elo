@@ -12,7 +12,7 @@ from datetime import datetime
 import inspect
 
 
-__version__  = '0.1.dev'
+__version__  = '0.1.1'
 __all__ = ['Elo', 'Rating', 'CountedRating', 'TimedRating', 'rate', 'adjust',
            'expect', 'rate_1vs1', 'adjust_1vs1', 'quality_1vs1', 'setup',
            'global_env', 'WIN', 'DRAW', 'LOSS', 'K_FACTOR', 'RATING_CLASS',
