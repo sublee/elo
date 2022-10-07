@@ -76,5 +76,4 @@ setup(
                  'Topic :: Games/Entertainment'],
     test_suite='elotests',
     tests_require=['pytest', 'almost'],
-    use_2to3=(sys.version_info[0] >= 3),
 )
